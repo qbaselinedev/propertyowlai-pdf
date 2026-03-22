@@ -808,7 +808,7 @@ def build(data, out):
 try:
     out_path  = sys.argv[1] if len(sys.argv) > 1 else '/tmp/pack.pdf'
     json_path = sys.argv[2] if len(sys.argv) > 2 else None
-    data = json.loads(open(json_path).read()) if json_path else json.load(sys.stdin)
+    data = json.loads(open(json_path).read()) if (json_path and json_path != '-') else json.load(sys.stdin)
     build(data, out_path)
     sys.stdout.write('OK\
 '); sys.stdout.flush()

@@ -140,7 +140,7 @@ def generate_pdf():
 
     try:
         result = subprocess.run(
-            ['python3', script_path, '/tmp/output.pdf', '-'],
+            ['python3', script_path, '/tmp/output.pdf'],
             input=pyjson.dumps(data).encode(),
             capture_output=True,
             timeout=60
