@@ -8,6 +8,7 @@ import pdfplumber
 from PIL import Image
 
 app = Flask(__name__)
+app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB max upload
 
 # Simple shared secret to prevent public access
 API_SECRET = os.environ.get('PDF_SERVICE_SECRET', 'changeme')
@@ -62,6 +63,7 @@ def process():
                     'text': text_pages
                 })
 
+            # thumbnails mode returns BOTH text and thumbnails in one response
             # Generate thumbnails (small, for document mapping)
             safe_token_limit = 47_000
             call1_overhead = 2_500
@@ -89,6 +91,15 @@ def process():
 
             # Generate full-res images for requested pages only
             full_res = {}
+            # For 'thumbnails' mode — return text + thumbnails, skip full_res
+            if mode == 'thumbnails':
+                return jsonify({
+                    'page_count': page_count,
+                    'text':       text_pages,
+                    'thumbnails': thumbnails,
+                })
+
+            # For 'full' mode — also render requested full-res pages
             if requested_pages:
                 for n in requested_pages:
                     try:
