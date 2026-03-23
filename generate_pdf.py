@@ -65,9 +65,9 @@ S = {
 
 # \u2500\u2500 Severity config \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 SEV = {
-    'high':   ('HIGH PRIORITY',   C_RED, C_RED_BG),
-    'medium': ('WORTH REVIEWING', C_AMB, C_AMB_BG),
-    'low':    ('GOOD TO KNOW',    MUTED,  SURFACE),
+    'high':   ('DETECTED',     C_RED, C_RED_BG),
+    'medium': ('ALSO DETECTED', C_AMB, C_AMB_BG),
+    'low':    ('ALSO NOTED',    MUTED,  SURFACE),
 }
 
 def safe(v, d=''): return str(v).strip() if v else d
@@ -92,7 +92,7 @@ class FlagCard(Flowable):
         self.tc = tc; self.bg = bg; self.label = label
         self.category = safe(category)
         self.issue = safe(issue)
-        self.rec = safe(recommendation)
+        self.rec = safe(recommendation or context_note or '')
         self._aw = aw; self._h = 0
 
     def wrap(self, aw, ah):
@@ -307,7 +307,7 @@ def footer_fn(addr, total_pages):
         canvas.line(ML, 11*mm, W-MR, 11*mm)
         canvas.setFont('Helvetica', 6.5); canvas.setFillColor(MUTED)
         canvas.drawCentredString(W/2, 8*mm,
-            f'PropertyOwl AI  \u00b7  Conveyancer Pack  \u00b7  {addr}  \u00b7  Page {doc.page} of {total_pages}')
+            f'PropertyOwl AI  \u00b7  Document Summary  \u00b7  {addr}  \u00b7  Page {doc.page} of {total_pages}')
         canvas.restoreState()
     return fn
 
@@ -315,7 +315,7 @@ def footer_fn(addr, total_pages):
 
 def page1(story, prop, s32, con, addr, today):
     story += [rb(), Spacer(1, 4*mm),
-              logo_row(f'Conveyancer Review Pack  \u00b7  {today}<br/>For buyer reference only \u2014 not legal advice'),
+              logo_row(f'Document Information Summary  \u00b7  {today}<br/>For buyer reference only \u2014 not legal advice'),
               Spacer(1, 5*mm)]
 
     sec = s32.get('sections') or {}
@@ -342,41 +342,40 @@ def page1(story, prop, s32, con, addr, today):
     story.append(Spacer(1, 5*mm))
 
     # Stats
-    af = (s32.get('red_flags') or []) + (con.get('red_flags') or [])
+    af = (s32.get('items_detected') or []) + (con.get('items_detected') or [])
     hf = [f for f in af if f.get('severity') == 'high']
     mf = [f for f in af if f.get('severity') == 'medium']
     lf = [f for f in af if f.get('severity') == 'low']
     pf = s32.get('positive_findings') or []
 
     story.append(stat_row([
-        (str(len(hf)), 'High priority', C_RED),
-        (str(len(mf)), 'Worth reviewing', C_AMB),
-        (str(len(lf)), 'Good to know', MUTED),
-        (str(len(pf)), 'Nothing noted', C_GRN),
+        (str(len(hf)), 'Detected', C_RED),
+        (str(len(mf)), 'Also detected', C_AMB),
+        (str(len(lf)), 'Also noted', MUTED),
+        (str(len(pf)), 'Nothing detected', C_GRN),
     ]))
     story.append(Spacer(1, 4*mm))
 
     # Notice
     story.append(notice_box(
-        'This is an AI-assisted summary of the uploaded documents. It is not legal advice. '
-        'Flags are starting points for questions \u2014 your conveyancer is the final authority before signing.'))
+        'PropertyOwl AI extracts and displays information from uploaded documents. Not legal advice.'))
     story.append(Spacer(1, 3*mm))
 
     # Summary
     parts = []
-    if hf: parts.append(f'{len(hf)} item{"s" if len(hf)>1 else ""} warrant{"" if len(hf)==1 else ""} attention before exchange')
-    if mf: parts.append(f'{len(mf)} item{"s" if len(mf)>1 else ""} worth discussing with your conveyancer')
-    if lf: parts.append(f'{len(lf)} minor item{"s" if len(lf)>1 else ""} noted for awareness')
+    if hf: parts.append(f'{len(hf)} item{"s" if len(hf)>1 else ""} detected')
+    if mf: parts.append(f'{len(mf)} item{"s" if len(mf)>1 else ""} also detected')
+    if lf: parts.append(f'{len(lf)} also noted')
     if not parts:
-        summary = 'No significant items identified. Your conveyancer should still review all details before exchange.'
+        summary = 'No items detected in the uploaded documents.'
     else:
-        summary = '. '.join(p.capitalize() for p in parts) + '. Your conveyancer is the final authority on all matters before signing.'
+        summary = '. '.join(p.capitalize() for p in parts) + '.'
     story.append(Paragraph(summary, S['verdict']))
     story.append(Spacer(1, 4*mm))
 
     # Flags \u2014 compact table on cover page
     if af:
-        story.append(sec_label('Items flagged for your attention'))
+        story.append(sec_label('Items detected in documents'))
         story.append(rule())
         story.append(flag_table(af))
 
@@ -417,12 +416,11 @@ def page2(story, s32, addr):
     story.append(PageBreak())
     story += [rb(), Spacer(1,4*mm), logo_row(addr), Spacer(1,2*mm),
               Paragraph('Areas with nothing of concern noted', S['pg_h']),
-              Paragraph('The following areas did not produce any flags based on the documents provided. '
-                        'This does not constitute legal clearance \u2014 verify independently with your conveyancer.', S['pg_d'])]
+              Paragraph('The following sections did not produce any detected items based on the documents provided.', S['pg_d'])]
 
     story.append(notice_box(
-        'Absence of a flag means the AI review did not identify anything requiring attention in the documents uploaded. '
-        'Documents may be incomplete. Always rely on your conveyancer\'s independent verification before exchange.'))
+        'Absence of detected items means the AI extraction did not identify anything in the documents uploaded. '
+        'Documents may be incomplete. Documents may be incomplete or contain information not captured by the extraction process.'))
     story.append(Spacer(1, 4*mm))
 
     sec = s32.get('sections') or {}
@@ -433,21 +431,21 @@ def page2(story, s32, addr):
     vd  = sec.get('vendor_disclosure') or {}
 
     for title, tag, tc, rows in [
-        ('Title & Ownership', 'Nothing noted', C_GRN, [
+        ('Title & Ownership', 'Nothing detected', C_GRN, [
             ('Estate type', 'Fee simple \u2014 freehold title in registered proprietors\' names.', 'Verify current ownership at LANDATA before exchange.'),
             ('Caveats', 'No caveats recorded at time of S32 preparation.', 'Caveats can be lodged at any time \u2014 confirm with fresh title search before settlement.'),
             ('Covenants', 'No restrictive covenants noted on title or plan of subdivision.', 'Review plan with conveyancer to confirm no OC rules affect intended use.'),
         ]),
-        ('Planning & Zoning', 'Nothing noted', C_GRN, [
+        ('Planning & Zoning', 'Nothing detected', C_GRN, [
             ('Zone', safe(ps.get('zone'), 'General Residential Zone') + ' \u2014 permits standard residential use.', 'Check with council if significant alterations or subdivision are intended.'),
             ('Overlays', 'None detected.', 'Verify via council planning portal. Overlays affect renovation costs and insurance.'),
             ('GAIC', 'Growth Areas Infrastructure Contribution not applicable.', None),
         ]),
-        ('Land Tax & Government Levies', 'Nothing noted', C_GRN, [
+        ('Land Tax & Government Levies', 'Nothing detected', C_GRN, [
             ('Land tax', safe(os_.get('land_tax'), '$0.00') + ' \u2014 vendor PPOR exemption applies.', 'This exemption belongs to the vendor. Consider your own land tax position if purchasing as investment.'),
             ('Windfall gains tax', safe(os_.get('windfall_gains_tax'), 'NIL') + ' \u2014 confirmed by SRO Clearance Certificate.', 'Applies to rezoning events \u2014 none applicable here.'),
         ]),
-        ('GST & Vendor Disclosure', 'Nothing noted', C_GRN, [
+        ('GST & Vendor Disclosure', 'Nothing detected', C_GRN, [
             ('GST withholding', 'No GST withholding obligation \u2014 standard residential sale.', None),
             ('Services', ', '.join(vd.get('services_connected') or ['Water','Sewerage','Electricity','Gas','Telephone']) + ' \u2014 all noted as connected.', 'Physically verify at inspection.'),
         ]),
@@ -466,7 +464,7 @@ def page2(story, s32, addr):
              'Review with your conveyancer to confirm the easement does not affect intended use.'),
         ]))
     else:
-        story.append(SectionBox('Easements', 'Nothing noted', C_GRN, [
+        story.append(SectionBox('Easements', 'Nothing detected', C_GRN, [
             ('Easements', 'No easements recorded on title.', 'Verify via plan of subdivision.'),
         ]))
 
@@ -553,7 +551,7 @@ def page4(story, s32, con, addr):
     o  = sec.get('outgoings') or {}
     oc = sec.get('owners_corporation') or {}
     rw = any(str(f.get('category','')).lower() in ['council rates','outgoings'] and
-             f.get('severity') == 'high' for f in (s32.get('red_flags') or []))
+             f.get('severity') == 'high' for f in (s32.get('items_detected') or []))
 
     story.append(sec_label('Council rates')); story.append(rule())
     story.append(kv_table([
@@ -609,7 +607,7 @@ def page5_issues(story, af, addr):
         # Title row with badge on right
         cat = safe(f.get('category'))
         title_t = Table(
-            [[Paragraph('Issue detail \u2014 ' + cat, S['pg_h']),
+            [[Paragraph('Item detected \u2014 ' + cat, S['pg_h']),
               Table([[Paragraph('HIGH PRIORITY',
                                 mk('hp', fontName='Helvetica-Bold', fontSize=6.5,
                                    textColor=C_RED, alignment=TA_CENTER))]],
@@ -627,31 +625,29 @@ def page5_issues(story, af, addr):
                               ('LEFTPADDING',(0,0),(-1,-1),0),('RIGHTPADDING',(0,0),(-1,-1),0),
                               ('TOPPADDING',(0,0),(-1,-1),0),('BOTTOMPADDING',(0,0),(-1,-1),0)]))
         story.append(title_t)
-        story.append(Paragraph('High priority \u2014 requires attention before exchange', S['pg_d']))
+        story.append(Paragraph('Detected in the document', S['pg_d']))
         story.append(rule())
         story.append(Spacer(1, 2*mm))
 
-        story.append(sec_label('What was found')); story.append(rule())
+        story.append(sec_label('Extracted from document')); story.append(rule())
         story.append(Paragraph(safe(f.get('issue')), S['body'])); story.append(Spacer(1, 4*mm))
 
-        story.append(sec_label('What to consider')); story.append(rule())
-        story.append(Paragraph(safe(f.get('recommendation')), S['body'])); story.append(Spacer(1, 4*mm))
+        story.append(sec_label('Context note')); story.append(rule())
+        story.append(Paragraph(safe(f.get('context_note', f.get('recommendation',''))), S['body'])); story.append(Spacer(1, 4*mm))
 
         story.append(sec_label('Document reference')); story.append(rule())
         story.append(kv_table([
             ('Category', cat, None),
-            ('Severity', 'High priority', 'r'),
+            ('Category type', 'Detected', 'r'),
             ('Source', 'Section 32 Vendor Statement / LANDATA title search', None),
         ])); story.append(Spacer(1, 4*mm))
 
         # Action boxes \u2014 plain grey, no strong colours
         for label, text in [
-            ('Questions for your conveyancer',
-             'Discuss this item before exchange. Ask: Is this standard for this transaction type? '
-             'What steps are needed before settlement? Are there risks if not resolved beforehand?'),
+            ('Questions to explore',
+             'This item was detected in the uploaded document. You may wish to explore it further with an adviser.'),
             ('Keep in mind',
-             'This flag is based on AI analysis of the uploaded documents. '
-             'Your conveyancer is the appropriate authority to assess significance and advise on action required.'),
+             'PropertyOwl AI extracts and displays information from uploaded documents only. Not legal advice.'),
         ]:
             box_t = Table([[Paragraph(label.upper(), mk('al', fontName='Helvetica-Bold',
                               fontSize=7, textColor=MUTED, leading=10, letterSpacing=0.5)),
@@ -671,19 +667,19 @@ def page5_issues(story, af, addr):
         if hf:  # Only page break if high flags already used a page
             story.append(PageBreak())
             story += [rb(), Spacer(1,4*mm), logo_row(addr), Spacer(1,2*mm),
-                      Paragraph('Further items to review', S['pg_h']),
-                      Paragraph('Items worth discussing with your conveyancer before exchange.', S['pg_d'])]
+                      Paragraph('Further items detected', S['pg_h']),
+                      Paragraph('Additional items identified in the uploaded documents.', S['pg_d'])]
         else:
             story += [Spacer(1,4*mm),
-                      Paragraph('Further items to review', S['pg_h']),
-                      Paragraph('Items worth discussing with your conveyancer before exchange.', S['pg_d'])]
+                      Paragraph('Further items detected', S['pg_h']),
+                      Paragraph('Additional items identified in the uploaded documents.', S['pg_d'])]
 
         for group, flags in [('Worth reviewing', mf), ('Good to know', lf)]:
             if not flags: continue
             story.append(sec_label(group)); story.append(rule())
             for f in flags:
                 story.append(FlagCard(f.get('severity','low'), f.get('category',''),
-                                      f.get('issue',''), f.get('recommendation',''), AW))
+                                      f.get('issue',''), f.get('context_note', f.get('recommendation','')), AW))
                 story.append(Spacer(1, 2*mm))
             story.append(Spacer(1, 3*mm))
 
@@ -693,16 +689,15 @@ def page_questions(story, s32, con, addr, add_break=True):
     if add_break:
         story.append(PageBreak())
     story += [rb(), Spacer(1,4*mm), logo_row(addr), Spacer(1,2*mm),
-              Paragraph('Questions to raise before signing', S['pg_h']),
-              Paragraph('Bring this page to your conveyancer meeting and when speaking with the agent or vendor. '
-                        'These are starting points only.', S['pg_d'])]
+              Paragraph('Questions to explore', S['pg_h']),
+              Paragraph('Items and questions identified in the uploaded documents, for your reference.', S['pg_d'])]
 
     qs  = (s32.get('conveyancer_questions') or []) + (con.get('conveyancer_questions') or [])
     neg = (s32.get('negotiation_points') or []) + (con.get('negotiation_points') or [])
     pos = s32.get('positive_findings') or []
 
     if qs:
-        story.append(sec_label('For your conveyancer')); story.append(rule())
+        story.append(sec_label('Questions to explore')); story.append(rule())
         for i, q in enumerate(qs, 1):
             t = Table([[Paragraph(str(i), S['q_n']), Paragraph(safe(q), S['q_b'])]],
                       colWidths=[12, AW-12])
@@ -714,7 +709,7 @@ def page_questions(story, s32, con, addr, add_break=True):
         story.append(Spacer(1, 5*mm))
 
     if neg:
-        story.append(sec_label('Negotiation points to consider')); story.append(rule())
+        story.append(sec_label('Items identified in document')); story.append(rule())
         for i, n in enumerate(neg, 1):
             t = Table([[Paragraph(str(i), S['q_n']), Paragraph(safe(n), S['q_b'])]],
                       colWidths=[12, AW-12])
@@ -744,8 +739,8 @@ def page_disclaimer(story, s32, con, prop, addr, today):
     story += [rb(), Spacer(1,4*mm), logo_row(addr), Spacer(1,2*mm),
               Paragraph('Important disclaimer', S['pg_h']), rule()]
     story.append(Paragraph(
-        'This Conveyancer Pack is produced by PropertyOwl AI, an AI-assisted property document review service. '
-        'It is provided solely to help buyers organise information and prepare questions for their conveyancer. '
+        'This Document Summary is produced by PropertyOwl AI, an AI-assisted property document review service. '
+        'It is provided solely to display information extracted from uploaded documents for reference purposes only. '
         'It is not legal advice, financial advice, or professional conveyancing advice of any kind.<br/><br/>'
         'PropertyOwl AI is not a licensed conveyancer, solicitor, legal practitioner, or financial adviser. '
         'The information in this pack is extracted and interpreted by an artificial intelligence system from the '
@@ -754,9 +749,7 @@ def page_disclaimer(story, s32, con, prop, addr, today):
         'Nothing in this pack should be treated as a complete or accurate statement of the legal or financial '
         'position of the property. The absence of a flag does not mean that item is legally clear or free of risk. '
         'Flags and observations are starting points for inquiry \u2014 not conclusions.<br/><br/>'
-        'You must engage a qualified and licensed Victorian conveyancer or solicitor before exchanging contracts, '
-        'paying any deposit, or making any financial commitment. Your conveyancer is the final authority on all '
-        'matters relating to the purchase.<br/><br/>'
+        'Always engage a qualified professional before making any property decision.<br/><br/>'
         'By using this pack, you acknowledge that PropertyOwl AI accepts no liability for any loss, damage, '
         'costs, or adverse outcome arising from reliance on this document.',
         S['disc'])); story.append(Spacer(1, 8*mm))
@@ -768,7 +761,7 @@ def page_disclaimer(story, s32, con, prop, addr, today):
         ('Generation date', today, None),
         ('Property', addr, None),
         ('Documents reviewed', dr, None),
-        ('Report type', 'S32 & Contract Review \u2014 Conveyancer Pack', None),
+        ('Report type', 'S32 & Contract Review \u2014 Document Summary', None),
     ]))
 
 # \u2500\u2500 Main \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
@@ -783,14 +776,14 @@ def build(data, out):
     addr = safe(prop.get('address')) + ', ' + safe(prop.get('suburb')) + \
            ((' ' + safe(prop.get('postcode'))) if prop.get('postcode') else '') + ' VIC'
 
-    af = (s32.get('red_flags') or []) + (con.get('red_flags') or [])
+    af = (s32.get('items_detected') or []) + (con.get('items_detected') or [])
     hf = [f for f in af if f.get('severity') == 'high']
     has_med_low = any(f.get('severity') in ('medium','low') for f in af)
     total_pages = 5 + len(hf) + (1 if has_med_low else 0)
 
     doc = SimpleDocTemplate(out, pagesize=A4,
                             leftMargin=ML, rightMargin=MR, topMargin=MT, bottomMargin=MB,
-                            title='PropertyOwl AI \u2014 Conveyancer Pack', author='PropertyOwl AI')
+                            title='PropertyOwl AI \u2014 Document Summary', author='PropertyOwl AI')
     story = []
     page1(story, prop, s32, con, addr, today)
     page2(story, s32, addr)
